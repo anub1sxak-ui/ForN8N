@@ -1,0 +1,78 @@
+name: n8n CI/CD & Doctor
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "workflows/*.json"
+  workflow_dispatch:
+
+jobs:
+  deploy-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      N8N_URL: ${{ secrets.N8N_URL }}
+      N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show workflows in repo
+        run: |
+          echo "Workflows in repo:"
+          ls -R workflows || echo "No workflows directory"
+
+      - name: Basic JSON validation
+        run: |
+          echo "Validating JSON files in workflows/..."
+          sudo apt-get update && sudo apt-get install -y jq
+          for f in workflows/*.json; do
+            echo "Checking $f"
+            jq . "$f" > /dev/null
+          done
+          echo "All JSON files are valid."
+
+      - name: Deploy workflows to n8n
+        run: |
+          echo "Deploying workflows to n8n..."
+          for f in workflows/*.json; do
+            [ -f "$f" ] || continue
+            ID=$(basename "$f" .json)
+            echo "Deploying workflow ID=$ID from file $f"
+
+            DATA=$(cat "$f")
+
+            STATUS=$(curl -s -o /tmp/n8n_resp.json -w "%{http_code}" \
+              -X PUT "$N8N_URL/rest/workflows/$ID" \
+              -H "X-N8N-API-KEY: $N8N_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$DATA")
+
+            echo "HTTP status for PUT /rest/workflows/$ID = $STATUS"
+
+            if [ "$STATUS" = "404" ]; then
+              echo "Workflow $ID not found. Creating new workflow via POST..."
+              curl -s -X POST "$N8N_URL/rest/workflows" \
+                -H "X-N8N-API-KEY: $N8N_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "$DATA" > /tmp/n8n_resp.json
+            fi
+
+            echo "n8n response:"
+            cat /tmp/n8n_resp.json
+            echo ""
+          done
+
+      - name: Call N8N Doctor workflow
+        run: |
+          echo "Calling N8N Doctor webhook..."
+          curl -s -X POST "$N8N_URL/webhook/n8n-doctor" \
+            -H "Content-Type: application/json" \
+            -d '{"source":"github","event":"post-deploy"}' \
+            -o /tmp/doctor_resp.json
+
+          echo "N8N Doctor response:"
+          cat /tmp/doctor_resp.json || echo "No response body"
