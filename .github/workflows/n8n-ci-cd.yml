@@ -27,7 +27,7 @@ jobs:
 
       - name: Convert workflow JSON to API schema
         run: |
-          echo "Converting n8n exported JSON into API schema format..."
+          echo "Converting n8n JSON into API schema format..."
           mkdir -p converted
 
           for f in workflows/*.json; do
@@ -39,29 +39,32 @@ jobs:
 
             jq '
               {
+                id: .id,
                 name: .name,
                 active: (.active // false),
                 nodes: .nodes,
                 connections: .connections,
-                settings: (.settings // {})
+                settings: (.settings // {}),
+                versionId: (.versionId // "1")
               }
             ' "$f" > "$OUT"
 
           done
 
-      - name: Deploy converted workflows to n8n
+      - name: Deploy converted workflows (API v2)
         run: |
-          echo "Deploying converted workflows to n8n..."
+          echo "Deploying via API v2..."
 
           for f in converted/*.json; do
             [ -f "$f" ] || continue
+
             ID=$(basename "$f" .json)
             DATA=$(cat "$f")
 
             echo "--- Deploying workflow $ID ---"
 
             STATUS=$(curl -s -o /tmp/n8n_resp.json -w "%{http_code}" \
-              -X PUT "$N8N_URL/api/v1/workflows/$ID" \
+              -X PUT "$N8N_URL/api/workflows/$ID" \
               -H "X-N8N-API-KEY: $N8N_API_KEY" \
               -H "Content-Type: application/json" \
               -d "$DATA")
@@ -70,7 +73,7 @@ jobs:
 
             if [ "$STATUS" = "404" ]; then
               echo "Workflow not found → creating..."
-              curl -s -X POST "$N8N_URL/api/v1/workflows" \
+              curl -s -X POST "$N8N_URL/api/workflows" \
                 -H "X-N8N-API-KEY: $N8N_API_KEY" \
                 -H "Content-Type: application/json" \
                 -d "$DATA" > /tmp/n8n_resp.json
@@ -83,7 +86,7 @@ jobs:
 
       - name: Call N8N Doctor webhook
         run: |
-          curl -s -X POST "$N8N_URL/api/v1/webhook/n8n-doctor" \
+          curl -s -X POST "$N8N_URL/api/webhook/n8n-doctor" \
             -H "Content-Type: application/json" \
             -d '{"source":"github"}' \
             -o /tmp/doctor.json
