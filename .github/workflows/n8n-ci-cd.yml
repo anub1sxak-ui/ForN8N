@@ -25,47 +25,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Show workflows in repo
+      - name: Convert workflow JSON to API schema
         run: |
-          echo "Workflows in repo:"
-          ls -R workflows || echo "No workflows directory"
-
-      - name: Convert n8n JSON → API schema
-        run: |
-          echo "Converting workflow JSON to API schema format..."
-
-          mkdir converted || true
+          echo "Converting n8n exported JSON into API schema format..."
+          mkdir -p converted
 
           for f in workflows/*.json; do
             [ -f "$f" ] || continue
             ID=$(basename "$f" .json)
+            OUT="converted/$ID.json"
 
-            echo "Converting $f → converted/$ID.json"
+            echo "Converting $f → $OUT"
 
-            # Remove unsupported fields and build proper API schema
             jq '
               {
                 name: .name,
                 active: (.active // false),
-                settings: (.settings // {}),
                 nodes: .nodes,
-                connections: .connections
+                connections: .connections,
+                settings: (.settings // {})
               }
-            ' "$f" > "converted/$ID.json"
+            ' "$f" > "$OUT"
 
           done
 
-      - name: Deploy workflows to n8n (API v1)
+      - name: Deploy converted workflows to n8n
         run: |
-          echo "Deploying workflows to n8n..."
+          echo "Deploying converted workflows to n8n..."
 
           for f in converted/*.json; do
             [ -f "$f" ] || continue
-
             ID=$(basename "$f" .json)
             DATA=$(cat "$f")
 
-            echo "--- Deploying workflow ID=$ID ---"
+            echo "--- Deploying workflow $ID ---"
 
             STATUS=$(curl -s -o /tmp/n8n_resp.json -w "%{http_code}" \
               -X PUT "$N8N_URL/api/v1/workflows/$ID" \
@@ -76,14 +69,24 @@ jobs:
             echo "HTTP status: $STATUS"
 
             if [ "$STATUS" = "404" ]; then
-              echo "Workflow does not exist → creating..."
+              echo "Workflow not found → creating..."
               curl -s -X POST "$N8N_URL/api/v1/workflows" \
                 -H "X-N8N-API-KEY: $N8N_API_KEY" \
                 -H "Content-Type: application/json" \
                 -d "$DATA" > /tmp/n8n_resp.json
             fi
 
-            echo "Response:"
+            echo "n8n response:"
             cat /tmp/n8n_resp.json
             echo ""
           done
+
+      - name: Call N8N Doctor webhook
+        run: |
+          curl -s -X POST "$N8N_URL/api/v1/webhook/n8n-doctor" \
+            -H "Content-Type: application/json" \
+            -d '{"source":"github"}' \
+            -o /tmp/doctor.json
+
+          echo "Doctor response:"
+          cat /tmp/doctor.json
