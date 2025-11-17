@@ -30,32 +30,37 @@ jobs:
           echo "Validating JSON files in workflows/..."
           sudo apt-get update && sudo apt-get install -y jq
           for f in workflows/*.json; do
+            [ -f "$f" ] || continue
             echo "Checking $f"
-            jq . "$f" > /dev/null
+            jq "." "$f" > /dev/null
           done
           echo "All JSON files are valid."
 
       - name: Deploy workflows to n8n
         run: |
           echo "Deploying workflows to n8n..."
+
           for f in workflows/*.json; do
             [ -f "$f" ] || continue
+
             ID=$(basename "$f" .json)
             echo "Deploying workflow ID=$ID from file $f"
 
             DATA=$(cat "$f")
 
+            # PUT (update existing workflow)
             STATUS=$(curl -s -o /tmp/n8n_resp.json -w "%{http_code}" \
-              -X PUT "$N8N_URL/rest/workflows/$ID" \
+              -X PUT "$N8N_URL/api/v1/workflows/$ID" \
               -H "X-N8N-API-KEY: $N8N_API_KEY" \
               -H "Content-Type: application/json" \
               -d "$DATA")
 
-            echo "HTTP status for PUT /rest/workflows/$ID = $STATUS"
+            echo "HTTP status for PUT /api/v1/workflows/$ID = $STATUS"
 
+            # If workflow does not exist → create it
             if [ "$STATUS" = "404" ]; then
-              echo "Workflow $ID not found. Creating new workflow via POST..."
-              curl -s -X POST "$N8N_URL/rest/workflows" \
+              echo "Workflow $ID not found. Creating workflow via POST..."
+              curl -s -X POST "$N8N_URL/api/v1/workflows" \
                 -H "X-N8N-API-KEY: $N8N_API_KEY" \
                 -H "Content-Type: application/json" \
                 -d "$DATA" > /tmp/n8n_resp.json
@@ -66,10 +71,11 @@ jobs:
             echo ""
           done
 
-      - name: Call N8N Doctor workflow
+      - name: Call N8N Doctor webhook
         run: |
           echo "Calling N8N Doctor webhook..."
-          curl -s -X POST "$N8N_URL/webhook/n8n-doctor" \
+
+          curl -s -X POST "$N8N_URL/api/v1/webhook/n8n-doctor" \
             -H "Content-Type: application/json" \
             -d '{"source":"github","event":"post-deploy"}' \
             -o /tmp/doctor_resp.json
