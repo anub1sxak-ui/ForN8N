@@ -1,0 +1,636 @@
+{
+  "name": "Telegram OCR Bot Simple",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -240
+      ],
+      "id": "bab301d2-5f2a-4659-86d5-e593bf3815ab"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "channel_post"
+        ],
+        "additionalFields": {
+          "download": true
+        }
+      },
+      "name": "Listen for Photos in Channel",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        -16
+      ],
+      "id": "f26b8157-f2ee-4b87-b978-75f459c36bbc",
+      "webhookId": "f489636d-7f51-46d7-aafe-2a92a5189589",
+      "credentials": {
+        "telegramApi": {
+          "id": "RzpP1T9xWoXvI11i",
+          "name": "Anub1sTG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.channel_post.photo[$json.channel_post.photo.length-1].file_id }}",
+        "additionalFields": {}
+      },
+      "name": "Get Photo File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        -368
+      ],
+      "id": "11edfe1d-7f42-452e-85a1-ecd12d6d76ed",
+      "webhookId": "2d2082d2-f6df-45b0-ad6c-ce22f466eca1",
+      "credentials": {
+        "telegramApi": {
+          "id": "RzpP1T9xWoXvI11i",
+          "name": "Anub1sTG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-1003411839934",
+        "text": "={{ $json.ParsedResults[0].ParsedText }}",
+        "additionalFields": {}
+      },
+      "name": "Post Text to Channel",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        192
+      ],
+      "id": "53f6701b-1ff9-46b2-a2c3-b00092429c37",
+      "webhookId": "cfef289f-7bdd-4486-8d0c-a9e2186724a0",
+      "credentials": {
+        "telegramApi": {
+          "id": "RzpP1T9xWoXvI11i",
+          "name": "Anub1sTG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.ParsedResults[0].ParsedText}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Was Text Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ],
+      "id": "3787fd04-b876-4815-b688-bc2cce0aaae5"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.message.chat.id}}",
+              "value2": -1003411839934
+            }
+          ]
+        }
+      },
+      "name": "Is it from the right channel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "ae2d4211-67ab-4d29-bbcd-c1509ee4f63a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ocr.space/parse/image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "K82599951588957"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "language",
+              "value": "rus"
+            },
+            {
+              "name": "isOverlayRequired",
+              "value": "false"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "data",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dc4b6109-dba9-4f3c-a0f4-019111c10db6",
+      "name": "OCR.space Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        464,
+        -736
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "PROMPT\n\nТы — AI-ассистент клиники оптики LUX, работающий в системе автоматизации n8n.\nТвоя задача — анализировать изображение (фото рецепта или скриншот отзыва), а также сопутствующий текст (caption) и возвращать строго структурированные данные в формате JSON, готовые для записи в Google Sheets.\n\nКЛАССИФИКАЦИЯ\n\nОпредели тип изображения. Возможные варианты:\n\n\"рецепт\"\n\n\"отзыв\"\n\n\"неизвестно\"\n\nТРЕБОВАНИЯ К ДАННЫМ\n\nТвой ответ обязан быть строго в формате JSON, без markdown, без блоков кода, без комментариев.\nСтруктура ВСЕГДА одна и та же:\n\n{\n  \"type\": \"\",\n  \"username\": \"\",\n  \"doctor\": \"\",\n  \"patient\": \"\",\n  \"review_text\": \"\",\n  \"clinic_address\": \"\",\n  \"other_info\": \"\"\n}\n\nОписание полей:\n\ntype — рецепт / отзыв / неизвестно\n\nusername — username отправителя из Telegram (я передаю его тебе во входных данных, используй как есть)\n\ndoctor — ФИО врача (если рецепт), ищи в caption в первую очередь\n\npatient — ФИО пациента из рецепта\n\nreview_text — полный текст отзыва (если отзыв)\n\nclinic_address — адрес салона (если указан в отзыве)\n\nother_info — любая дополнительная информация: параметры зрения (OD/OS, SPH, CYL, AX, PD), номер заказа, дата оформления, название клиники и всё остальное, что есть на рецепте\n\nЛОГИКА ОБРАБОТКИ\nЕсли документ — РЕЦЕПТ:\n\nОпредели ФИО врача:\n\nесли есть caption — БЕРИ СТРОГО ИЗ CAPTION\n\nесли caption пустой — ищи на изображении\n\nНайди ФИО пациента на фото.\n\nСобери все медицинские параметры, адрес клиники, номера заказов, даты, диагнозы и т.п.\nСложи всё в поле other_info одной строкой.\n\nПоля для отзыва (review_text, clinic_address) оставь пустыми.\n\nЕсли документ — ОТЗЫВ:\n\nНайди имя клиента по структуре скрина.\n\nИзвлеки весь отзыв дословно → в review_text.\n\nЕсли указан адрес салона — добавь в clinic_address.\n\nПоля doctor, patient, other_info остаются пустыми.\n\nЕсли документ — НЕИЗВЕСТНО:\n\nВерни \"type\": \"неизвестно\" и остальные поля оставь пустыми.\n\nОГРАНИЧЕНИЯ\n\nВозвращай только JSON, никаких пояснений.\n\nНикаких ```json и других markdown-блоков.\n\nНикаких фраз до или после JSON.\n\nЗначения всегда должны быть строками (\"\"), даже если пустые.\n\nПРИМЕРЫ\nРецепт:\n{\n  \"type\": \"рецепт\",\n  \"username\": \"client123\",\n  \"doctor\": \"Королева И.В.\",\n  \"patient\": \"Сидоренко Ксения Николаевна\",\n  \"review_text\": \"\",\n  \"clinic_address\": \"\",\n  \"other_info\": \"OD: sph -0.75 OS: sph -1.0; PD: 55.5; Номер заказа М 001681; Клиника Оптика LUX\"\n}\n\nОтзыв:\n{\n  \"type\": \"отзыв\",\n  \"username\": \"client123\",\n  \"doctor\": \"\",\n  \"patient\": \"\",\n  \"review_text\": \"Спасибо большое за помощь! Отличный сервис.\",\n  \"clinic_address\": \"г. Самара, ул. Мичурина 126\",\n  \"other_info\": \"\"\n}\n\nНеизвестно:\n{\n  \"type\": \"неизвестно\",\n  \"username\": \"client123\",\n  \"doctor\": \"\",\n  \"patient\": \"\",\n  \"review_text\": \"\",\n  \"clinic_address\": \"\",\n  \"other_info\": \"\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        864,
+        -704
+      ],
+      "id": "5ec3a9f8-22ab-4e42-a737-87cb20fcfaf4",
+      "name": "AI Agent",
+      "notes": "{\n  \"model\": \"gemini-1.5-flash\",\n  \"instruction\": \"Ты умный помощник внутри n8n. Исправь ошибки OCR, нормально отформатируй текст и удали мусорные символы и в конце скажи \" ВАСЯОТРЕДАКТИРОВАЛ.\",\n  \"input\": \"={{ $json.ParsedResults[0].ParsedText }}\",\n  \"credentials\": {\n    \"googleGeminiApi\": {\n      \"id\": \"YOUR_GEMINI_CREDENTIALS_ID\"\n    }\n  }\n}\n"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -160
+      ],
+      "id": "3d8761c8-a7c2-4444-951b-06ba8629a093",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U7kIyqCQf1uIUD96",
+          "name": "Anub1sGoogle"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json[\"type\"].trim() }}",
+              "value2": "рецепт"
+            }
+          ]
+        }
+      },
+      "name": "Is it from the right channel?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        -464
+      ],
+      "id": "b46c9e44-903a-44e8-b644-cf72e24ed745"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json[\"type\"].trim() }}\n",
+              "value2": "отзыв"
+            }
+          ]
+        }
+      },
+      "name": "Is it from the right channel?2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1616,
+        -368
+      ],
+      "id": "fe3b4d07-46c5-4b42-bed0-7afddf2db016"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1RLSCpg5dAfUcyWCGiiPJDJDUdKJgAXSjGQAjQmnIg7E",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "0",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Дата",
+              "displayName": "Дата",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "USERNAME кто запостил",
+              "displayName": "USERNAME кто запостил",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Имя клиента",
+              "displayName": "Имя клиента",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Сам отзыв",
+              "displayName": "Сам отзыв",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Адрес Салона ( если есть )",
+              "displayName": "Адрес Салона ( если есть )",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "values": [
+            {
+              "columnName": "Дата",
+              "columnValue": "={{ $now.toFormat('dd.MM.yyyy HH:mm') }}"
+            },
+            {
+              "columnName": "USERNAME кто запостил",
+              "columnValue": "={{$('Telegram Trigger').item.json.message.from.username}}"
+            },
+            {
+              "columnName": "ФИО ВРАЧА",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.врач}}"
+            },
+            {
+              "columnName": "ФИО ПАЦИЕНТА",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.пациент}}"
+            },
+            {
+              "columnName": "Остальная инфа из рецепта",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.остальная_инфа}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "abe4e209-0306-43b6-b7e7-7f7187a79f18",
+      "name": "Google Sheets (Рецепты)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1808,
+        -512
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "Ltc2n0jzWZaLPiAh",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1RLSCpg5dAfUcyWCGiiPJDJDUdKJgAXSjGQAjQmnIg7E",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "59397898",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Дата",
+              "displayName": "Дата",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "USERNAME кто запостил",
+              "displayName": "USERNAME кто запостил",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Имя клиента",
+              "displayName": "Имя клиента",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Сам отзыв",
+              "displayName": "Сам отзыв",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Адрес Салона ( если есть )",
+              "displayName": "Адрес Салона ( если есть )",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "values": [
+            {
+              "columnName": "Дата",
+              "columnValue": "={{ $now.toFormat('dd.MM.yyyy HH:mm') }}"
+            },
+            {
+              "columnName": "USERNAME кто запостил",
+              "columnValue": "={{$('Telegram Trigger').item.json.message.from.username}}"
+            },
+            {
+              "columnName": "ФИО ВРАЧА",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.врач}}"
+            },
+            {
+              "columnName": "ФИО ПАЦИЕНТА",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.пациент}}"
+            },
+            {
+              "columnName": "Остальная инфа из рецепта",
+              "columnValue": "={{$('Parse AI Agent JSON').item.json.data.остальная_инфа}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6b1a7349-2d6a-40d4-a79d-085160a161b8",
+      "name": "Google Sheets (Отзывы)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2000,
+        -384
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "Ltc2n0jzWZaLPiAh",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(item => {\n  const parsed = JSON.parse(item.json.output);\n\n  const text = parsed.other_info || \"\";\n\n  const extract = (regex) => {\n    const match = text.match(regex);\n    return match ? match[1].trim() : \"\";\n  };\n\n  return {\n    json: {\n      type: parsed.type,\n      username: parsed.username || \"\",\n      doctor: parsed.doctor || \"\",\n      patient: parsed.patient || \"\",\n      clinic_address: parsed.clinic_address || \"\",\n\n      // OD\n      OD_sph: extract(/OD: sph ([\\-\\d\\.]+)/i),\n      OD_cyl: extract(/OD: sph [\\-\\d\\.]+; cyl ([\\-\\d\\.]+)/i),\n      OD_ax: extract(/OD: sph [\\-\\d\\.]+;.*?ax (\\d+)/i),\n\n      // OS\n      OS_sph: extract(/OS: sph ([\\-\\d\\.]+)/i),\n      OS_cyl: extract(/OS: sph [\\-\\d\\.]+; cyl ([\\-\\d\\.]+)/i),\n      OS_ax: extract(/OS: sph [\\-\\d\\.]+;.*?ax (\\d+)/i),\n\n      // PD\n      PD: extract(/PD:\\s*([\\d\\.]+)/i),\n\n      // Номер заказа\n      order_number: extract(/Номер заказа\\s*([A-ZА-Я0-9]+)/i),\n\n      // Дата оформления заказа\n      order_date: extract(/Дата оформления\\s*([\\d\\.]+)/i),\n\n      // Назначение\n      purpose: extract(/Назначение:\\s*([^;]+)/i),\n\n      // Линзы\n      lenses: extract(/Линзы:\\s*([^;]+)/i),\n\n      // Сырой текст — чтобы ничего не потерять\n      raw_text: text\n    }\n  };\n});\n\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        -704
+      ],
+      "id": "e65c57e0-71ac-4466-a6bd-747d62da9211",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Listen for Photos in Channel": {
+      "main": [
+        [
+          {
+            "node": "Is it from the right channel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Photo File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Text Found?": {
+      "main": [
+        [
+          {
+            "node": "Post Text to Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Is it from the right channel?": {
+      "main": [
+        [
+          {
+            "node": "Get Photo File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Photo File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR.space Request": {
+      "main": [
+        []
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it from the right channel?1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets (Рецепты)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is it from the right channel?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it from the right channel?2": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets (Отзывы)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Is it from the right channel?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "ff164907-f6ac-4bc5-8a2d-e262fddde97c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dbbe42f0bd12e52b005b836e656c23c49cb3072e810aa89a0e226253706733e6"
+  },
+  "id": "gUEg0r5UUhDRAx6n",
+  "tags": []
+}
